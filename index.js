@@ -87,6 +87,10 @@ app.post('/webhook',
 // ─── 3. JSON parsing for all other routes ───
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+    return res.status(200).send('OK');
+});
+
 // ─── 4. Firebase Auth for API routes ───
 app.use(verifyFirebaseToken);
 
