@@ -107,6 +107,10 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/health', (req, res) => {
+    return res.status(200).send('OK');
+});
+
 // ─── 8. Graceful shutdown ───
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received — shutting down gracefully');
