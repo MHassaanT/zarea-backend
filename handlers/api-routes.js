@@ -283,12 +283,24 @@ router.post('/oauth/facebook-instagram', async (req, res) => {
       results.facebook.push({ pageId: page.id, pageName: page.name });
 
       // 5. Save Instagram if linked
-      if (page.instagram_business_account?.id) {
-        await db.collection(COLLECTIONS.INSTAGRAM_SESSIONS).doc(page.instagram_business_account.id).set({
+      let igId = page.instagram_business_account?.id;
+      
+      // Fallback: Query the page directly using the page access token (Graph API quirk)
+      if (!igId) {
+        const igCheckUrl = `${META.GRAPH_BASE_URL}/${META.API_VERSION}/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
+        const igCheckRes = await fetch(igCheckUrl);
+        const igCheckData = await igCheckRes.json();
+        if (igCheckData.instagram_business_account?.id) {
+          igId = igCheckData.instagram_business_account.id;
+        }
+      }
+
+      if (igId) {
+        await db.collection(COLLECTIONS.INSTAGRAM_SESSIONS).doc(igId).set({
           userId,
           connected: true,
           status: 'active',
-          instagramBusinessId: page.instagram_business_account.id,
+          instagramBusinessId: igId,
           pageId: page.id,
           pageName: page.name,
           pageAccessToken: page.access_token,
@@ -296,7 +308,7 @@ router.post('/oauth/facebook-instagram', async (req, res) => {
         }, { merge: true });
 
         results.instagram.push({ 
-          instagramBusinessId: page.instagram_business_account.id,
+          instagramBusinessId: igId,
           pageName: page.name 
         });
       }
