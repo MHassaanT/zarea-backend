@@ -12,8 +12,6 @@ const COLLECTIONS = {
   BUSINESS_CONTEXT: 'business_context',
   PRODUCT_CATALOG: 'product_catalog',
   BILLING_PLANS: 'billing_plans',
-  USAGE_COUNTERS: 'usage_counters',
-  PLAN_EVENTS: 'plan_events',
   WEBHOOK_EVENTS: 'webhook_events',
   WHATSAPP_SESSIONS: 'whatsapp_sessions',
   FACEBOOK_SESSIONS: 'facebook_sessions',

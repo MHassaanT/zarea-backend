@@ -6,7 +6,6 @@
 
 const { getDb } = require('../lib/firebase');
 const { COLLECTIONS, DEFAULT_BUSINESS_CONTEXT } = require('../config/constants');
-const { checkAndIncrementUsage } = require('./usage-counter');
 const { callAIForClassification, callAIForExtraction, callAIForReply } = require('./ai-calls');
 const { qualifyLead } = require('./qualify-logic');
 const { logger } = require('../utils/logger');
@@ -157,38 +156,22 @@ async function processMessage(doc, message, docId, userId) {
   };
 
   if (classification.isLead) {
-    const usage = await checkAndIncrementUsage(userId);
+    const catalogTable = await getProductCatalog(userId);
+    autoReplyText = await callAIForReply(
+      message.body,
+      classification.intent,
+      isReturningClient,
+      isQualified,
+      missingName,
+      missingEmail,
+      totalMessagesFromClient,
+      userId,
+      businessContext,
+      catalogTable
+    );
 
-    if (!usage.allowed) {
-      autoReplyText =
-        'Thank you for reaching out. We have reached our monthly AI message limit. ' +
-        'Please contact us directly or upgrade your plan for uninterrupted service.';
-
-      await db.collection(COLLECTIONS.PLAN_EVENTS).add({
-        userId,
-        event: 'limit_exceeded',
-        planId: usage.planId,
-        messageCount: usage.current,
-        timestamp: admin.firestore.Timestamp.now(),
-      });
-    } else {
-      const catalogTable = await getProductCatalog(userId);
-      autoReplyText = await callAIForReply(
-        message.body,
-        classification.intent,
-        isReturningClient,
-        isQualified,
-        missingName,
-        missingEmail,
-        totalMessagesFromClient,
-        userId,
-        businessContext,
-        catalogTable
-      );
-
-      if (autoReplyText) {
-        autoReplyText += '\n\n*Note: You are talking to an AI Agent. It can make mistakes.*';
-      }
+    if (autoReplyText) {
+      autoReplyText += '\n\n*Note: You are talking to an AI Agent. It can make mistakes.*';
     }
 
     updateData.replyPending = true;

@@ -7,7 +7,6 @@
 const express = require('express');
 const { getDb } = require('../lib/firebase');
 const { COLLECTIONS, META } = require('../config/constants');
-const { getUsage, updateUserPlan } = require('../modules/usage-counter');
 const { logger } = require('../utils/logger');
 const fetch = require('node-fetch');
 
@@ -18,16 +17,6 @@ router.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'zarea-backend', timestamp: new Date().toISOString() });
 });
 
-router.get('/usage/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const usage = await getUsage(userId);
-    res.json(usage);
-  } catch (err) {
-    logger.error('Get usage error', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 router.post('/connect/facebook', async (req, res) => {
   try {
