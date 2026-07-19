@@ -107,10 +107,10 @@ async function sendWhatsAppReply(msg, docRef) {
 
 async function sendFacebookReply(msg, docRef) {
   const db = getDb();
-  const snap = await db.collection(COLLECTIONS.FACEBOOK_SESSIONS).doc(msg.userId).get();
+  const snap = await db.collection(COLLECTIONS.FACEBOOK_SESSIONS).doc(msg.to).get();
 
   if (!snap.exists) {
-    logger.warn('No Facebook session found', { userId: msg.userId });
+    logger.warn('No Facebook session found', { pageId: msg.to, userId: msg.userId });
     return;
   }
 
