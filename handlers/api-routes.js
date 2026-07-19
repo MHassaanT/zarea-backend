@@ -213,7 +213,7 @@ router.post('/oauth/facebook-instagram', async (req, res) => {
       return res.status(400).json({ error: 'Missing userId or accessToken' });
     }
 
-    const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+    const appId = process.env.META_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
 
     // 1. Debug the token
