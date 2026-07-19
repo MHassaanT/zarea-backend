@@ -80,6 +80,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseAIJson(text) {
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+  }
+  return JSON.parse(cleaned);
+}
+
 async function callAIForClassification(messageBody, userId, businessContext) {
   if (!OPENROUTER_API_KEY) {
     return { isLead: false, intent: 'API Key Missing' };
@@ -94,7 +102,7 @@ async function callAIForClassification(messageBody, userId, businessContext) {
 
   try {
     const text = await openRouterRequest(systemPrompt, `Message: "${messageBody}"`, AI.MODEL_FREE, true);
-    const result = JSON.parse(text);
+    const result = parseAIJson(text);
     logger.info('Classification result', { userId, isLead: result.isLead, intent: result.intent });
     return result;
   } catch (error) {
@@ -115,7 +123,7 @@ async function callAIForExtraction(messageBody) {
 
   try {
     const text = await openRouterRequest(systemPrompt, `Message: "${messageBody}"`, AI.MODEL_FREE, true);
-    return JSON.parse(text);
+    return parseAIJson(text);
   } catch (error) {
     return { name: null, email: null };
   }
