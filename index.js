@@ -5,6 +5,7 @@
 
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 
 const { initializeFirebase } = require('./lib/firebase');
 const { verifyFirebaseToken } = require('./middleware/auth');
@@ -24,6 +25,7 @@ const { logger } = require('./utils/logger');
 
 const PORT = process.env.PORT || 4000;
 const app = express();
+app.use(cors());
 
 // ─── 1. Meta Webhook Verification (GET) ───
 app.get('/webhook', (req, res) => {
