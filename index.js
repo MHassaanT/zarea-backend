@@ -18,6 +18,7 @@ const whatsappResolver = require('./handlers/whatsapp');
 const facebookResolver = require('./handlers/facebook');
 const instagramResolver = require('./handlers/instagram');
 const apiRoutes = require('./handlers/api-routes');
+const oauthRoutes = require('./handlers/oauth-routes');
 
 const { startAiProcessor, stopAiProcessor } = require('./modules/ai-processor');
 const { startReplyExecutor, stopReplyExecutor } = require('./modules/reply-executor');
@@ -101,6 +102,7 @@ app.use('/api', apiLimiter);
 
 // ─── 6. API Routes ───
 app.use('/api', apiRoutes);
+app.use('/api/oauth', oauthRoutes);
 
 // ─── 7. Root health ───
 app.get('/', (req, res) => {
