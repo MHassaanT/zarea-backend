@@ -7,7 +7,7 @@ const admin = require('firebase-admin');
 
 const router = express.Router();
 
-const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
+const APP_ID = process.env.META_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID;
 const APP_SECRET = process.env.META_APP_SECRET;
 
 // ─── Exchange Short-Lived Token & Connect Facebook/Instagram ───
