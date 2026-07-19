@@ -330,16 +330,96 @@ router.post('/oauth/facebook-instagram', async (req, res) => {
 // ─── WhatsApp OAuth via JS SDK ───
 router.post('/oauth/whatsapp', async (req, res) => {
   try {
-    const { userId, accessToken } = req.body;
-    if (!userId || !accessToken) {
-      return res.status(400).json({ error: 'Missing userId or accessToken' });
+    const { userId, code } = req.body;
+    if (!userId || !code) {
+      return res.status(400).json({ error: 'Missing userId or code' });
     }
 
-    logger.info('WhatsApp OAuth received', { userId });
+    logger.info('WhatsApp OAuth code received', { userId });
     
+    const appId = process.env.META_WA_APP_ID;
+    const appSecret = process.env.META_WA_APP_SECRET;
+
+    if (!appId || !appSecret) {
+      throw new Error('WhatsApp App credentials (META_WA_APP_ID, META_WA_APP_SECRET) not configured on backend.');
+    }
+
+    // 1. Exchange code for access token
+    const tokenUrl = `${META.GRAPH_BASE_URL}/${META.API_VERSION}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${code}`;
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData = await tokenRes.json();
+
+    if (tokenData.error) {
+      logger.error('WA Code exchange failed', { error: tokenData.error });
+      return res.status(400).json({ error: 'Token exchange failed', details: tokenData.error.message });
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // 2. Debug token to get WABA ID
+    const debugUrl = `${META.GRAPH_BASE_URL}/${META.API_VERSION}/debug_token?input_token=${accessToken}&access_token=${appId}|${appSecret}`;
+    const debugRes = await fetch(debugUrl);
+    const debugData = await debugRes.json();
+
+    if (!debugData.data?.is_valid) {
+      return res.status(401).json({ error: 'Exchanged access token is invalid' });
+    }
+
+    // Find WABA ID from granular scopes
+    const granularScopes = debugData.data.granular_scopes || [];
+    const wbmScope = granularScopes.find(s => s.scope === 'whatsapp_business_management' || s.scope === 'whatsapp_business_messaging');
+    
+    let wabaId = null;
+    if (wbmScope && wbmScope.target_ids && wbmScope.target_ids.length > 0) {
+      wabaId = wbmScope.target_ids[0];
+    }
+
+    // Fallback if not found in granular scopes
+    if (!wabaId) {
+      const waAccountsRes = await fetch(`${META.GRAPH_BASE_URL}/${META.API_VERSION}/me/client_wa_accounts?access_token=${accessToken}`);
+      const waAccountsData = await waAccountsRes.json();
+      if (waAccountsData.data && waAccountsData.data.length > 0) {
+        wabaId = waAccountsData.data[0].id;
+      }
+    }
+
+    if (!wabaId) {
+      return res.status(400).json({ error: 'Could not resolve WhatsApp Business Account ID. Please ensure the business was correctly linked.' });
+    }
+
+    // 3. Get Phone Number ID
+    const phonesRes = await fetch(`${META.GRAPH_BASE_URL}/${META.API_VERSION}/${wabaId}/phone_numbers?access_token=${accessToken}`);
+    const phonesData = await phonesRes.json();
+
+    if (!phonesData.data || phonesData.data.length === 0) {
+      return res.status(400).json({ error: 'No phone numbers found in the WhatsApp Business Account.' });
+    }
+
+    // Just grab the first phone number for now (can be expanded to let user select later)
+    const phoneData = phonesData.data[0];
+    const phoneNumberId = phoneData.id;
+    const displayPhoneNumber = phoneData.display_phone_number;
+
+    // 4. Save to Firestore
+    const db = getDb();
+    await db.collection(COLLECTIONS.WHATSAPP_SESSIONS).doc(userId).set({
+      userId,
+      connected: true,
+      status: 'active',
+      wabaId,
+      phoneNumberId,
+      displayPhoneNumber,
+      accessToken,
+      connectedAt: admin.firestore.Timestamp.now(),
+    }, { merge: true });
+
+    logger.info('WhatsApp connected successfully', { userId, phoneNumberId });
+
     res.json({ 
       success: true, 
-      message: 'WhatsApp connection initiated. Complete setup in Meta Business Manager.' 
+      message: 'WhatsApp connected successfully.',
+      phoneNumberId,
+      displayPhoneNumber
     });
 
   } catch (err) {
