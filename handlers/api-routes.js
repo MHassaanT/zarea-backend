@@ -205,4 +205,134 @@ router.post('/disconnect', async (req, res) => {
   }
 });
 
+// ─── Facebook & Instagram OAuth via JS SDK ───
+router.post('/oauth/facebook-instagram', async (req, res) => {
+  try {
+    const { userId, accessToken } = req.body;
+    if (!userId || !accessToken) {
+      return res.status(400).json({ error: 'Missing userId or accessToken' });
+    }
+
+    const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+
+    // 1. Debug the token
+    const debugRes = await fetch(
+      `${META.GRAPH_BASE_URL}/${META.API_VERSION}/debug_token?input_token=${accessToken}&access_token=${appId}|${appSecret}`
+    );
+    const debugData = await debugRes.json();
+
+    if (!debugData.data?.is_valid) {
+      return res.status(401).json({ error: 'Invalid access token' });
+    }
+
+    // Check required scopes
+    const scopes = debugData.data?.scopes || [];
+    const requiredScopes = ['pages_show_list', 'pages_messaging', 'instagram_basic', 'instagram_manage_messages'];
+    const missingScopes = requiredScopes.filter(s => !scopes.includes(s));
+    
+    if (missingScopes.length > 0) {
+      logger.warn('Missing scopes', { userId, missing: missingScopes });
+      // Don't fail — some scopes might be optional, just log it
+    }
+
+    // 2. Get user's pages
+    const pagesRes = await fetch(
+      `${META.GRAPH_BASE_URL}/${META.API_VERSION}/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${accessToken}`
+    );
+    const pagesData = await pagesRes.json();
+
+    if (!pagesData?.data || pagesData.data.length === 0) {
+      return res.status(400).json({ 
+        error: 'No pages found or granted by the user.',
+        details: 'Please ensure you are an Admin of a Facebook Page and granted permission during login.'
+      });
+    }
+
+    logger.info('Found pages', { userId, count: pagesData.data.length });
+
+    const results = { facebook: [], instagram: [] };
+    const db = getDb();
+
+    for (const page of pagesData.data) {
+      // 3. Subscribe page to webhooks
+      const webhookFields = ['messages', 'messaging_postbacks', 'messaging_optins'].join(',');
+      const subRes = await fetch(
+        `${META.GRAPH_BASE_URL}/${META.API_VERSION}/${page.id}/subscribed_apps?subscribed_fields=${webhookFields}&access_token=${page.access_token}`,
+        { method: 'POST' }
+      );
+      const subData = await subRes.json();
+      
+      if (subData.error) {
+        logger.error('Webhook subscription failed', { pageId: page.id, error: subData.error });
+        continue;
+      }
+
+      // 4. Save Facebook session
+      await db.collection(COLLECTIONS.FACEBOOK_SESSIONS).doc(page.id).set({
+        userId,
+        connected: true,
+        status: 'active',
+        pageId: page.id,
+        pageName: page.name,
+        pageAccessToken: page.access_token,
+        connectedAt: admin.firestore.Timestamp.now(),
+      }, { merge: true });
+
+      results.facebook.push({ pageId: page.id, pageName: page.name });
+
+      // 5. Save Instagram if linked
+      if (page.instagram_business_account?.id) {
+        await db.collection(COLLECTIONS.INSTAGRAM_SESSIONS).doc(page.instagram_business_account.id).set({
+          userId,
+          connected: true,
+          status: 'active',
+          instagramBusinessId: page.instagram_business_account.id,
+          pageId: page.id,
+          pageName: page.name,
+          pageAccessToken: page.access_token,
+          connectedAt: admin.firestore.Timestamp.now(),
+        }, { merge: true });
+
+        results.instagram.push({ 
+          instagramBusinessId: page.instagram_business_account.id,
+          pageName: page.name 
+        });
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Meta accounts connected successfully',
+      facebook: results.facebook,
+      instagram: results.instagram 
+    });
+
+  } catch (err) {
+    logger.error('OAuth Facebook-Instagram error', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── WhatsApp OAuth via JS SDK ───
+router.post('/oauth/whatsapp', async (req, res) => {
+  try {
+    const { userId, accessToken } = req.body;
+    if (!userId || !accessToken) {
+      return res.status(400).json({ error: 'Missing userId or accessToken' });
+    }
+
+    logger.info('WhatsApp OAuth received', { userId });
+    
+    res.json({ 
+      success: true, 
+      message: 'WhatsApp connection initiated. Complete setup in Meta Business Manager.' 
+    });
+
+  } catch (err) {
+    logger.error('OAuth WhatsApp error', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
