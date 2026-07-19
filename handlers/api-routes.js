@@ -243,8 +243,9 @@ router.post('/oauth/facebook-instagram', async (req, res) => {
     const pagesData = await pagesRes.json();
 
     if (!pagesData?.data || pagesData.data.length === 0) {
+      const dbg = debugData.data?.scopes ? debugData.data.scopes.join(', ') : 'none';
       return res.status(400).json({ 
-        error: 'No pages found or granted by the user.',
+        error: `No pages found. Scopes granted: [${dbg}]. Meta Response: ${JSON.stringify(pagesData)}`,
         details: 'Please ensure you are an Admin of a Facebook Page and granted permission during login.'
       });
     }
