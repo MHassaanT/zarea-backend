@@ -15,31 +15,48 @@ function rawBodySaver(req, res, buf, encoding) {
 function verifyMetaSignature(req, res, next) {
   const signature = req.headers['x-hub-signature-256'];
   const appSecret = process.env.META_APP_SECRET;
+  const waAppSecret = process.env.META_WA_APP_SECRET;
 
-  if (!signature || !appSecret) {
+  if (!signature) {
+    logger.error('Missing webhook signature');
+    return res.status(401).json({ error: 'Missing signature' });
+  }
+
+  if (!appSecret && !waAppSecret) {
     logger.error('Missing webhook signature configuration');
-    return res.status(401).json({ error: 'Missing signature configuration' });
+    return res.status(500).json({ error: 'Missing signature configuration' });
   }
 
-  const expected = 'sha256=' + crypto
-    .createHmac('sha256', appSecret)
-    .update(req.rawBody, 'utf8')
-    .digest('hex');
+  const rawBody = req.body;
 
-  try {
+  let isValid = false;
+
+  // Check against Facebook App Secret
+  if (appSecret) {
+    const expectedFb = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
     const sigBuf = Buffer.from(signature);
-    const expBuf = Buffer.from(expected);
-
-    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      logger.warn('Invalid webhook signature', { ip: req.ip });
-      return res.status(403).json({ error: 'Invalid signature' });
+    const expBufFb = Buffer.from(expectedFb);
+    if (sigBuf.length === expBufFb.length && crypto.timingSafeEqual(sigBuf, expBufFb)) {
+      isValid = true;
     }
-
-    next();
-  } catch (e) {
-    logger.error('Signature verification error', { error: e.message });
-    return res.status(403).json({ error: 'Signature verification failed' });
   }
+
+  // Check against WhatsApp App Secret
+  if (!isValid && waAppSecret) {
+    const expectedWa = 'sha256=' + crypto.createHmac('sha256', waAppSecret).update(rawBody).digest('hex');
+    const sigBuf = Buffer.from(signature);
+    const expBufWa = Buffer.from(expectedWa);
+    if (sigBuf.length === expBufWa.length && crypto.timingSafeEqual(sigBuf, expBufWa)) {
+      isValid = true;
+    }
+  }
+
+  if (!isValid) {
+    logger.warn('Invalid webhook signature', { ip: req.ip });
+    return res.status(403).json({ error: 'Invalid signature' });
+  }
+
+  next();
 }
 
 module.exports = { rawBodySaver, verifyMetaSignature };

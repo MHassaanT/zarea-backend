@@ -26,6 +26,7 @@ const { logger } = require('./utils/logger');
 
 const PORT = process.env.PORT || 4000;
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 
 // ─── 1. Meta Webhook Verification (GET) ───
