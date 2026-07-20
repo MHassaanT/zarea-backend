@@ -182,6 +182,7 @@ router.post('/disconnect', async (req, res) => {
     for (const doc of snap.docs) {
       const data = doc.data();
 
+      // Facebook & Instagram
       if (data.pageAccessToken && data.pageId) {
         try {
           await fetch(
@@ -191,6 +192,19 @@ router.post('/disconnect', async (req, res) => {
           logger.info(`Unsubscribed ${platform} page from webhooks`, { pageId: data.pageId });
         } catch (e) {
           logger.warn(`Failed to unsubscribe ${platform} page`, { pageId: data.pageId, error: e.message });
+        }
+      }
+
+      // WhatsApp
+      if (data.accessToken && data.wabaId) {
+        try {
+          await fetch(
+            `${META.GRAPH_BASE_URL}/${META.API_VERSION}/${data.wabaId}/subscribed_apps?access_token=${data.accessToken}`,
+            { method: 'DELETE' }
+          );
+          logger.info(`Unsubscribed ${platform} WABA from webhooks`, { wabaId: data.wabaId });
+        } catch (e) {
+          logger.warn(`Failed to unsubscribe ${platform} WABA`, { wabaId: data.wabaId, error: e.message });
         }
       }
 
@@ -403,7 +417,21 @@ router.post('/oauth/whatsapp', async (req, res) => {
     const phoneNumberId = phoneData.id;
     const displayPhoneNumber = phoneData.display_phone_number;
 
-    // 4. Save to Firestore
+    // 4. Subscribe WABA to Webhooks
+    const subRes = await fetch(`${META.GRAPH_BASE_URL}/${META.API_VERSION}/${wabaId}/subscribed_apps`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    const subData = await subRes.json();
+    if (subData.error) {
+      logger.warn('WABA webhook subscription failed', { wabaId, error: subData.error });
+    } else {
+      logger.info('WABA webhook subscribed successfully', { wabaId });
+    }
+
+    // 5. Save to Firestore
     const db = getDb();
     await db.collection(COLLECTIONS.WHATSAPP_SESSIONS).doc(userId).set({
       userId,
