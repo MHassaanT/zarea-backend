@@ -93,11 +93,19 @@ async function callAIForClassification(messageBody, userId, businessContext) {
     return { isLead: false, intent: 'API Key Missing' };
   }
 
-  const systemPrompt =
-    `You are a lead classifier for ${businessContext.businessName} (${businessContext.businessDescription}). ` +
+  const systemPrompt = 
+    `You are a classification engine for ${businessContext.businessName} (${businessContext.businessDescription}). ` +
     `Services: ${businessContext.servicesOffered}. ` +
-    `Is the client message a genuine business inquiry (pricing, service, consultation)? ` +
-    `Or is it spam, a greeting with no intent, or a system message? ` +
+    `Your task is to classify whether a user's message is a business-related query/lead. ` +
+    `Set "isLead": true for ANY of the following: ` +
+    `- Inquiries about services, products, or pricing. ` +
+    `- General questions about the business (e.g., "What do you do?", "Tell me about your business"). ` +
+    `- Operational questions (e.g., business hours, location, contact details, policies). ` +
+    `- Requests for consultation, support, or follow-ups. ` +
+    `Set "isLead": false ONLY for: ` +
+    `- Pure greetings with no follow-up question (e.g., "Hi", "Hello"). ` +
+    `- Spam, promotional messages, or irrelevant chatter. ` +
+    `- System messages or gibberish. ` +
     `Reply ONLY with valid JSON, no markdown. Schema: { "isLead": boolean, "intent": string }`;
 
   try {
